@@ -75,7 +75,7 @@ def main():
     temperature = 25
     altitude = 250
     timezone = "UTC"
-    downscale_alg = "liu"
+    downscale_alg = "garg"
 
     power_outputs = []
 
@@ -102,10 +102,11 @@ def main():
                     ghid, daterange365, location, timezone, downscale_alg
                 )
                 pd.set_option("display.max_rows", None)
-                # print(ghih.head(96))
+                # print(ghih.head(365 * 24))
 
-                hdata = rs.irradiance.ghi_to_dni(ghih, model="erbs")
-                # print(hdata.head(96))
+                hdata = rs.irradiance.ghi_to_dni(ghih, model="disc")
+                print(hdata.head(24 * 7))
+                exit(0)
                 pvsys = {
                     "name": "1kWp",
                     "type": "single",
