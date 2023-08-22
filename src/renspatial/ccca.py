@@ -46,9 +46,8 @@ def getxy(nd, point):
     abslon = np.abs(nd.lon - point.geometry.x)
     c = np.maximum(abslon, abslat)
 
-    ([yloc], [xloc]) = np.where(c == np.min(c))
-    # print(point)
-    # print(nd['x'][xloc].values, nd['y'][yloc].values)
+    yloc = np.where(c == np.min(c))[0][0]
+    xloc = np.where(c == np.min(c))[1][0]
     return (nd["x"][xloc].values, nd["y"][yloc].values)
 
 
