@@ -69,7 +69,7 @@ def calculate_coordinates(x, y, zoom_level):
 
 datadir = "~/basemapAT/"
 
-zoomlevel = 16
+zoomlevel = 15
 bbox = (9.47996951665, 46.4318173285, 16.9796667823, 49.0390742051)
 
 server = "https://maps{}.wien.gv.at"
