@@ -1,8 +1,11 @@
 import geopandas as gpd
+import pandas as pd
 import rasterio
 from rasterio.warp import calculate_default_transform, reproject
 import numpy as np
 import concurrent.futures
+import random
+from shapely.geometry import Polygon, Point
 
 
 def process_chunks_parallel(
@@ -63,6 +66,44 @@ def regular_points(polygon, spacing=100):
     return grid_gdf
 
 
+def random_points(polygon, num_points, spacing=100, crs="EPSG:3857"):
+    """
+    Generates random points within a polygon while enforcing a minimum spacing between points.
+
+    Parameters:
+    - polygon (shapely.geometry.Polygon): The polygon in which to generate random points.
+    - num_points (int): The number of random points to generate.
+    - spacing (float, optional): The minimum spacing between points (default is 100).
+
+    Returns:
+    - List[shapely.geometry.Point]: A list of random points within the polygon.
+
+    The function generates random points within the specified polygon. It ensures that the
+    generated points are at least 'spacing' units away from each other within the polygon.
+
+    Example:
+    ```python
+    from shapely.geometry import Polygon
+    polygon = Polygon([(0, 0), (0, 100), (100, 100), (100, 0)])
+    random_points = generate_random_points_in_polygon(polygon, 10, 20)
+    ```
+
+    This example generates 10 random points within the polygon with a minimum spacing of 20 units between points.
+    """
+    points = []
+    min_x, min_y, max_x, max_y = polygon.bounds
+    while len(points) < num_points:
+        x = random.uniform(min_x, max_x)
+        y = random.uniform(min_y, max_y)
+        point = Point(x, y)
+        if polygon.contains(point):
+            if all(
+                point.distance(existing_point) >= spacing for existing_point in points
+            ):
+                points.append(point)
+    return gpd.GeoDataFrame(points, columns=["geometry"], crs=crs)
+
+
 def clip_points():
     parser = argparse.ArgumentParser(
         description="Clip points using a polygon and save as a shapefile."
@@ -114,7 +155,7 @@ def reproject_raster_layer(input_raster, target_crs):
         target_crs,
         input_raster.width,
         input_raster.height,
-        *input_raster.bounds
+        *input_raster.bounds,
     )
 
     kwargs = input_raster.meta.copy()
