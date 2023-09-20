@@ -5,66 +5,7 @@ import requests
 import time
 import random
 import math
-
-
-def deg2num(lat_deg, lon_deg, zoom):
-    lat_rad = math.radians(lat_deg)
-    n = 2.0**zoom
-    xtile = int((lon_deg + 180.0) / 360.0 * n)
-    ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
-    return (xtile, ytile)
-
-
-def getTotalTileCount(leftBottom, rightTop, fromZoom, toZoom):
-    totalTileCount = 0
-    for zoom in range(fromZoom, toZoom + 1):
-        leftBottomTiles = deg2num(leftBottom, zoom)
-        rightTopTiles = deg2num(rightTop, zoom)
-
-        currentTileCount = (rightTopTiles[0] - leftBottomTiles[0] + 1) * (
-            leftBottomTiles[1] - rightTopTiles[1] + 1
-        )
-        print(
-            "zoom = "
-            + str(zoom)
-            + ", leftBottomTiles = "
-            + str(leftBottomTiles)
-            + ", rightTopTiles = "
-            + str(rightTopTiles)
-            + ", tileCount = "
-            + str(currentTileCount)
-        )
-
-        totalTileCount += currentTileCount
-
-    return totalTileCount
-
-
-def calculate_tile_indices(lon, lat, zoom_level):
-    n = 2**zoom_level  # Total number of tiles at this zoom level
-    x = int((lon + 180.0) / 360.0 * n)
-    y = int(
-        (
-            1.0
-            - (
-                math.log(
-                    math.tan(math.radians(lat)) + 1.0 / math.cos(math.radians(lat))
-                )
-                / math.pi
-            )
-        )
-        / 2.0
-        * n
-    )
-    return x, y
-
-
-def calculate_coordinates(x, y, zoom_level):
-    n = 2**zoom_level
-    lon = x / n * 360.0 - 180.0
-    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * y / n)))
-    lat = math.degrees(lat_rad)
-    return lon, lat
+import renspatial as rs
 
 
 datadir = "~/basemapAT/"
@@ -74,8 +15,8 @@ bbox = (9.47996951665, 46.4318173285, 16.9796667823, 49.0390742051)
 
 server = "https://maps{}.wien.gv.at"
 
-minX, maxY = calculate_tile_indices(bbox[0], bbox[1], zoomlevel)
-maxX, minY = calculate_tile_indices(bbox[2], bbox[3], zoomlevel)
+minX, maxY = rs.calculate_tile_indices(bbox[0], bbox[1], zoomlevel)
+maxX, minY = rs.calculate_tile_indices(bbox[2], bbox[3], zoomlevel)
 
 print(minX, maxX, minY, maxY)
 # minX, maxX = 8624, 8972

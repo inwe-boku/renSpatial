@@ -1,99 +1,161 @@
 #!/usr/bin/python
 
+import numpy as np
 import os
+import sys
+from osgeo import ogr
 import math
-import ogr
-import gdal
 
 
-class TileProcessing:
-    def __init__(self, zoom_level, bbox):
-        self.zoom_level = zoom_level
-        self.bbox = bbox
-        self.dest_srs = ogr.osr.SpatialReference()
-        self.dest_srs.ImportFromEPSG(3857)
-        self.source_srs = ogr.osr.SpatialReference()
-        self.source_srs.ImportFromEPSG(4326)
-        self.geometry_type = ogr.wkbPolygon
+def deg2num(lon_deg, lat_deg, zoom):
+    lat_rad = math.radians(lat_deg)
+    n = 2.0**zoom
+    xtile = int((lon_deg + 180.0) / 360.0 * n)
+    ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+    return (ytile, xtile)
 
-    def deg2num(self, lon_deg, lat_deg):
-        lat_rad = math.radians(lat_deg)
-        n = 2.0**self.zoom_level
-        xtile = int((lon_deg + 180.0) / 360.0 * n)
-        ytile = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
-        return ytile, xtile
 
-    def num2deg(self, xtile, ytile):
-        n = 2.0**self.zoom_level
-        lon_deg = xtile / n * 360.0 - 180.0
-        lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
-        lat_deg = math.degrees(lat_rad)
-        return lat_deg, lon_deg
+def num2deg(xtile, ytile, zoom):
+    n = 2.0**zoom
+    lon_deg = xtile / n * 360.0 - 180.0
+    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+    lat_deg = math.degrees(lat_rad)
+    return (lat_deg, lon_deg)
 
-    def process_tile(self, x, y, filename):
-        if os.path.isfile(filename) and os.path.getsize(filename) > 0:
-            osm = ogr.Open(filename)
-            n_layer_count = osm.GetLayerCount()
-            for ilayer in range(n_layer_count):
-                lyr = osm.GetLayer(ilayer)
-                if lyr.GetName() == "GEBAEUDE_F_GEBAEUDE":
-                    return lyr
-        return None
 
-    def extract_buildings(self, input_file, output_layer):
-        for feat in input_file:
-            out_feat = ogr.Feature(output_layer.GetLayerDefn())
-            out_feat.SetGeometry(feat.GetGeometryRef().Clone())
-            output_layer.CreateFeature(out_feat)
-            out_feat = None
-            output_layer.SyncToDisk()
+def main():
+    working_directory = ""
+    zoomLevel = 16
 
-    def main(self):
-        minX, maxY = self.deg2num(bbox[0], bbox[1], zoomlevel)
-        maxX, minY = self.deg2num(bbox[2], bbox[3], zoomlevel)
+    at1 = (9.47996951665, 46.4318173285)
+    at2 = (16.9796667823, 49.0390742051)
 
-        print("Start")
-        original_file = "data/%d/%d/%d.pbf"
-        out_dir = "vector/"
+    # at1 = (15.30, 48.75)
+    # at2 = (15.35, 48.80)
 
-        if not os.path.exists(out_dir):
-            os.makedirs(out_dir)
+    maxY, minX = deg2num(at1[0], at1[1], zoomLevel)
+    minY, maxX = deg2num(at2[0], at2[1], zoomLevel)
 
-        total_number_of_tiles = (maxX - minX + 1) * (maxY - minY + 1)
-        number_of_tiles_processed = 0
+    print("start")
 
-        drv = ogr.GetDriverByName("GPKG")
-        out_ds = drv.CreateDataSource("vector/buildings.gpkg")
-        out_lyr = out_ds.CreateLayer("buildings", self.dest_srs, self.geometry_type)
+    originalFile = "data/%d/%d/%d.pbf"
+    outDir = "vector/"
+    if not os.path.exists(outDir):
+        os.makedirs(outDir)
 
-        first_buildings = True
+    totalNumberOfTiles = (maxX - minX + 1) * (maxY - minY + 1)
+    numberOfTilesProcessed = 0
 
-        for x in range(minX, maxX + 1):
-            for y in range(minY, maxY + 1):
-                print("Processing tile %d / %d." % (x, y))
-                filename = original_file % (self.zoom_level, x, y)
-                extracted_layer = self.process_tile(x, y, filename)
+    dest_srs = ogr.osr.SpatialReference()
+    dest_srs.ImportFromEPSG(3857)
+    geometryType = ogr.wkbPolygon
+    drv = ogr.GetDriverByName("GPKG")
+    outds = drv.CreateDataSource("vector/buildings.gpkg")
+    # outlyr = outds.CreateLayer("buildings", dest_srs, geometryType)
 
-                if extracted_layer:
-                    if first_buildings:
-                        out_lyr = out_ds.CopyLayer(extracted_layer, "buildings")
-                        out_lyr.SyncToDisk()
-                        first_buildings = False
-                    self.extract_buildings(extracted_layer, out_lyr)
+    source_srs = ogr.osr.SpatialReference()
+    source_srs.ImportFromEPSG(4326)
+
+    print("loop")
+    firstbuildings = 1
+    # Loop through all tiles
+    for x in range(minX, maxX + 1):
+        for y in range(minY, maxY + 1):
+            print("We're on %d / %d." % (x, y))
+            filename = originalFile % (zoomLevel, x, y)
+            if os.path.isfile(filename):
+                if os.path.getsize(filename) > 0:
+                    print("File exists and is not empty. Extracting buildings...")
+                    print(filename)
+                    osm = ogr.Open(filename)
+                    nLayerCount = osm.GetLayerCount()
+                    for ilayer in range(nLayerCount):
+                        lyr = osm.GetLayer(ilayer)
+                        if lyr.GetName() == "GEBAEUDE_F_GEBAEUDE":
+                            if firstbuildings:
+                                outlyr = outds.CopyLayer(lyr, "buildings")
+                                outlyr.SyncToDisk()
+                                firstbuildings = 0
+                            # lyrnam = str(x) + '-' + str(y)
+                            for feat in lyr:
+                                out_feat = ogr.Feature(outlyr.GetLayerDefn())
+                                out_feat.SetGeometry(feat.GetGeometryRef().Clone())
+                                outlyr.CreateFeature(out_feat)
+                                out_feat = None
+                                outlyr.SyncToDisk()
+                                # outlyr = outds.CopyLayer(lyr, lyrnam)
                 else:
-                    print("Error: Tile %d / %d does not exist or is empty." % (x, y))
-
-                number_of_tiles_processed += 1
-                percent = (number_of_tiles_processed / total_number_of_tiles) * 100
+                    print("File exists but is empty, what to do?")
+            else:
                 print(
-                    "Processed %d / %d tiles (%.3f%%)"
-                    % (number_of_tiles_processed, total_number_of_tiles, percent)
+                    "Error: Tile %d / %d does not exist. Trying a lower zoomlevel"
+                    % (x, y)
                 )
+                lat1, lon1 = num2deg(x, y, zoomLevel)
+                lat2, lon2 = num2deg(x + 1, y + 1, zoomLevel)
+                nY, nX = deg2num(lon1, lat1, zoomLevel - 1)
+                # print("y-x: %d - %d" % (nY, nX))
+                filename = originalFile % (zoomLevel - 1, nX, nY)
+                if os.path.isfile(filename):
+                    if os.path.getsize(filename) > 0:
+                        print("File exists and is not empty. Extracting buildings...")
+                        # print(filename)
+                        osm = ogr.Open(filename)
+                        nLayerCount = osm.GetLayerCount()
+                        for ilayer in range(nLayerCount):
+                            lyr = osm.GetLayer(ilayer)
+                            wkt = (
+                                "POLYGON (("
+                                + str(lat1)
+                                + " "
+                                + str(lon1)
+                                + ","
+                                + str(lat1)
+                                + " "
+                                + str(lon2)
+                                + ","
+                                + str(lat2)
+                                + " "
+                                + str(lon2)
+                                + ","
+                                + str(lat2)
+                                + " "
+                                + str(lon1)
+                                + ","
+                                + str(lat1)
+                                + " "
+                                + str(lon1)
+                                + "))"
+                            )
+                            geometry = ogr.CreateGeometryFromWkt(wkt)
+                            transform = ogr.osr.CoordinateTransformation(
+                                source_srs, dest_srs
+                            )
+                            geometry.Transform(transform)
+
+                            if lyr.GetName() == "GEBAEUDE_F_GEBAEUDE":
+                                lyr.SetSpatialFilter(geometry)
+                                if firstbuildings:
+                                    outlyr = outds.CopyLayer(lyr, "buildingsadd")
+                                    outlyr.SyncToDisk()
+                                    firstbuildings = 0
+                                lyrnam = str(x) + "-" + str(y)
+                                for feat in lyr:
+                                    out_feat = ogr.Feature(outlyr.GetLayerDefn())
+                                    out_feat.SetGeometry(feat.GetGeometryRef().Clone())
+                                    outlyr.CreateFeature(out_feat)
+                                    out_feat = None
+                                    outlyr.SyncToDisk()
+
+            numberOfTilesProcessed += 1
+            percent = (
+                float(numberOfTilesProcessed) / float(totalNumberOfTiles) * float(100)
+            )
+            print(
+                " --- Processed %d / %d (%.3f percent)"
+                % (numberOfTilesProcessed, totalNumberOfTiles, percent)
+            )
 
 
 if __name__ == "__main__":
-    zoomlevel = 16
-    bbox = (9.47996951665, 46.4318173285, 16.9796667823, 49.0390742051)
-
-    processor = TileProcessing(zoomlevel, bbox)
-    processor.main()
+    main()
