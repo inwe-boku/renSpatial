@@ -8,6 +8,30 @@ import random
 from shapely.geometry import Polygon, Point
 
 
+def sample_raster(chunk, rasterfile, colname="elevation"):
+    # Open the DEM raster using rasterio
+    with rasterio.open(rasterfile) as src:
+        # Convert the chunk to a GeoDataFrame
+        chunk_gdf = gpd.GeoDataFrame(chunk)
+
+        # Create a mask to extract elevation values for each point
+        mask = geometry_mask(
+            chunk_gdf.geometry,
+            out_shape=src.shape,
+            transform=src.transform,
+            invert=True,
+        )
+
+        # Sample elevation values
+        rastervalues = src.read(1, masked=True)[mask]
+
+        # Add the elevation values to the chunk's DataFrame
+        chunk_gdf[colname] = rastervalues
+
+        # Return the processed chunk as a GeoDataFrame
+        return chunk_gdf
+
+
 def process_chunks_parallel(
     gpkg_filepath, chunk_size, processing_function, num_workers
 ):
